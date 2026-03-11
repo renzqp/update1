@@ -1,0 +1,319 @@
+-- =========================
+-- PERFORMANCE HUB - WindUI Script
+-- =========================
+
+-- Load WindUI
+local WindUI = loadstring(game:HttpGet("https://raw.githubusercontent.com/Footagesus/WindUI/main/dist/main.lua"))()
+
+-- Create Window
+local Window = WindUI:CreateWindow({
+    Title = "Performance Hub",
+    Author = "Your Script",
+    Theme = "Dark"
+})
+
+-- Tabs
+local CustomTab = Window:Tab({Title = "Customization"})
+local AutofarmTab = Window:Tab({Title = "Autofarm"})
+
+-- Services
+local Players = game:GetService("Players")
+local TeleportService = game:GetService("TeleportService")
+local workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+-- =========================
+-- FULLSCREEN BlackScreen
+-- =========================
+
+local blackGui = Instance.new("ScreenGui")
+blackGui.Name = "BlackScreenGui"
+blackGui.ResetOnSpawn = false
+blackGui.IgnoreGuiInset = true
+blackGui.Parent = player:WaitForChild("PlayerGui")
+
+local blackScreen = Instance.new("Frame")
+blackScreen.Size = UDim2.new(1,0,1,0)
+blackScreen.BackgroundColor3 = Color3.fromRGB(0,0,0)
+blackScreen.BorderSizePixel = 0
+blackScreen.Visible = false
+blackScreen.ZIndex = 999
+blackScreen.Parent = blackGui
+
+CustomTab:Toggle({
+    Title = "BlackScreen",
+    Default = false,
+    Callback = function(state)
+        blackScreen.Visible = state
+    end
+})
+
+-- =========================
+-- NO MAP
+-- =========================
+
+local allowedNames = {["Coin"] = true}
+
+local function hideObject(obj)
+	if obj:IsA("BasePart") and not allowedNames[obj.Name] then
+		obj.LocalTransparencyModifier = 1
+		obj.CanCollide = false
+	end
+end
+
+CustomTab:Toggle({
+    Title = "No Map",
+    Default = false,
+    Callback = function(state)
+
+        if state then
+            for _, obj in ipairs(workspace:GetDescendants()) do
+                hideObject(obj)
+            end
+
+            workspace.Terrain:Clear()
+
+            workspace.DescendantAdded:Connect(function(obj)
+                hideObject(obj)
+            end)
+        end
+
+    end
+})
+
+-- =========================
+-- NO TEXTURE
+-- =========================
+
+CustomTab:Toggle({
+    Title = "No Texture",
+    Default = false,
+    Callback = function(state)
+
+        if state then
+            for _,v in pairs(game:GetDescendants()) do
+
+                if v:IsA("Decal") or v:IsA("Texture") then
+                    v:Destroy()
+
+                elseif v:IsA("MeshPart") then
+                    v.TextureID = ""
+
+                elseif v:IsA("SpecialMesh") then
+                    v.TextureId = ""
+
+                elseif v:IsA("BasePart") then
+                    v.Material = Enum.Material.SmoothPlastic
+                end
+
+            end
+        end
+    end
+})
+
+-- =========================
+-- INSTANT REJOIN
+-- =========================
+
+CustomTab:Toggle({
+    Title = "Instant Rejoin",
+    Default = false,
+    Callback = function(state)
+
+        if state then
+            task.defer(function()
+                TeleportService:Teleport(game.PlaceId, player)
+            end)
+        end
+
+    end
+})
+
+-- =========================
+-- AUTOFARM CONFIG
+-- =========================
+
+local coins = {}
+local autofarmEnabled = false
+
+local cooldown = 0.5
+local lastCollect = 0
+
+local BAG_LIMIT = 40
+local LobbyPosition = Vector3.new(0,10,0)
+
+local bagValue
+task.spawn(function()
+	local stats = player:WaitForChild("leaderstats",10)
+	if stats then
+		bagValue = stats:FindFirstChild("Coins")
+	end
+end)
+
+-- =========================
+-- MAP SPAWN DETECTOR
+-- =========================
+
+local currentMap
+local mapSpawns = {}
+
+local function detectMap()
+
+	mapSpawns = {}
+	currentMap = nil
+
+	for _,obj in pairs(workspace:GetChildren()) do
+
+		local spawnFolder = obj:FindFirstChild("PlayerSpawns") or obj:FindFirstChild("Spawns")
+
+		if spawnFolder then
+
+			currentMap = obj
+
+			for _,spawn in pairs(spawnFolder:GetChildren()) do
+				if spawn:IsA("BasePart") then
+					table.insert(mapSpawns, spawn.Position)
+				end
+			end
+
+			break
+		end
+
+	end
+
+end
+
+detectMap()
+
+workspace.ChildAdded:Connect(function()
+	task.wait(1)
+	detectMap()
+end)
+
+local function getMapSpawn()
+
+	if #mapSpawns == 0 then
+		return nil
+	end
+
+	return mapSpawns[math.random(1,#mapSpawns)]
+
+end
+
+-- =========================
+-- COIN TRACKING
+-- =========================
+
+local function addCoin(obj)
+	if obj:IsA("BasePart") and obj.Name == "Coin" then
+		coins[obj] = true
+	end
+end
+
+local function removeCoin(obj)
+	coins[obj] = nil
+end
+
+for _,obj in ipairs(workspace:GetDescendants()) do
+	addCoin(obj)
+end
+
+workspace.DescendantAdded:Connect(addCoin)
+workspace.DescendantRemoving:Connect(removeCoin)
+
+-- =========================
+-- CHARACTER HANDLING
+-- =========================
+
+local humanoid
+local root
+
+local function onCharacter(char)
+
+	humanoid = char:WaitForChild("Humanoid")
+	root = char:WaitForChild("HumanoidRootPart")
+
+	humanoid.Died:Connect(function()
+
+		if not autofarmEnabled then return end
+
+		task.wait(2)
+
+		if bagValue and bagValue.Value >= BAG_LIMIT then
+			char:PivotTo(CFrame.new(LobbyPosition))
+		else
+
+			local spawnPos = getMapSpawn()
+
+			if spawnPos then
+				char:PivotTo(CFrame.new(spawnPos + Vector3.new(0,3,0)))
+			end
+
+		end
+
+	end)
+
+end
+
+if player.Character then
+	onCharacter(player.Character)
+end
+
+player.CharacterAdded:Connect(onCharacter)
+
+-- =========================
+-- AUTOFARM TOGGLE
+-- =========================
+
+AutofarmTab:Toggle({
+	Title = "Auto Farm Coins",
+	Default = false,
+	Callback = function(state)
+		autofarmEnabled = state
+	end
+})
+
+-- =========================
+-- AUTOFARM LOOP
+-- =========================
+
+RunService.Heartbeat:Connect(function()
+
+	if not autofarmEnabled then return end
+	if not root then return end
+
+	if tick() - lastCollect < cooldown then
+		return
+	end
+
+	if bagValue and bagValue.Value >= BAG_LIMIT then
+		root.CFrame = CFrame.new(LobbyPosition)
+		return
+	end
+
+	local closestCoin
+	local closestDistance = math.huge
+
+	for coin in pairs(coins) do
+
+		if coin and coin.Parent then
+
+			local dist = (coin.Position - root.Position).Magnitude
+
+			if dist < closestDistance then
+				closestDistance = dist
+				closestCoin = coin
+			end
+
+		end
+
+	end
+
+	if closestCoin then
+		root.CFrame = CFrame.new(closestCoin.Position + Vector3.new(0,3,0))
+		lastCollect = tick()
+	end
+
+end)
