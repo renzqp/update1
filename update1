@@ -267,122 +267,24 @@ player.CharacterAdded:Connect(onCharacter)
 -- AUTOFARM TOGGLE
 -- =========================
 
-AutofarmTab:Toggle({
-	Title = "Auto Farm Coins",
-	Default = false,
-	Callback = function(state)
-		autofarmEnabled = state
-	end
-})
-
--- =========================
--- SMART AUTOFARM SYSTEM
--- =========================
-
-local autofarmConnection
-local currentTarget
-local lastPosition
-local stuckTimer = 0
+local autofarmLoaded = false
 
 AutofarmTab:Toggle({
 	Title = "Enable Auto Farm",
 	Default = false,
 	Callback = function(state)
 
-		autofarmEnabled = state
-
 		if state then
 
-			autofarmConnection = RunService.Heartbeat:Connect(function()
+			-- Prevent loading twice
+			if autofarmLoaded then return end
+			autofarmLoaded = true
 
-				if not player.Character then return end
-				local root = player.Character:FindFirstChild("HumanoidRootPart")
-				if not root then return end
-
-				-- cooldown
-				if tick() - lastCollect < cooldown then return end
-
-				-- bag full → lobby
-				if bagValue and bagValue.Value >= BAG_LIMIT then
-					root.CFrame = CFrame.new(LobbyPosition)
-					return
-				end
-
-				-- =========================
-				-- SMART COIN ROUTING
-				-- =========================
-
-				if not currentTarget or not currentTarget.Parent then
-
-					local bestCoin
-					local bestScore = math.huge
-
-					for coin in pairs(coins) do
-
-						if coin and coin.Parent then
-
-							local dist = (coin.Position - root.Position).Magnitude
-
-							if dist < bestScore then
-								bestScore = dist
-								bestCoin = coin
-							end
-
-						end
-
-					end
-
-					currentTarget = bestCoin
-
-				end
-
-				if currentTarget then
-					root.CFrame = CFrame.new(currentTarget.Position + Vector3.new(0,3,0))
-					lastCollect = tick()
-				end
-
-
-				-- =========================
-				-- ANTI STUCK SYSTEM
-				-- =========================
-
-				if lastPosition then
-
-					local moved = (root.Position - lastPosition).Magnitude
-
-					if moved < 1 then
-						stuckTimer += RunService.Heartbeat:Wait()
-					else
-						stuckTimer = 0
-					end
-
-					-- if stuck 3 seconds
-					if stuckTimer > 3 then
-
-						currentTarget = nil
-						stuckTimer = 0
-
-						local spawnPos = getMapSpawn()
-
-						if spawnPos then
-							root.CFrame = CFrame.new(spawnPos + Vector3.new(0,3,0))
-						end
-
-					end
-
-				end
-
-				lastPosition = root.Position
-
-			end)
+			loadstring(game:HttpGet("https://raw.githubusercontent.com/renzqp/update1/main/update1"))()
 
 		else
-
-			if autofarmConnection then
-				autofarmConnection:Disconnect()
-				autofarmConnection = nil
-			end
-
+			-- Optional: reset so it can be loaded again
+			autofarmLoaded = false
 		end
 
 	end
