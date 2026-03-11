@@ -263,12 +263,6 @@ end
 
 player.CharacterAdded:Connect(onCharacter)
 
--- =========================
--- AUTOFARM TOGGLE
--- =========================
-
-local autofarmLoaded = false
-
 AutofarmTab:Toggle({
 	Title = "Enable Auto Farm",
 	Default = false,
@@ -276,15 +270,57 @@ AutofarmTab:Toggle({
 
 		if state then
 
-			-- Prevent loading twice
-			if autofarmLoaded then return end
-			autofarmLoaded = true
+			task.spawn(function()
 
-			loadstring(game:HttpGet("https://raw.githubusercontent.com/renzqp/update1/main/update1"))()
+				while true do
+					task.wait(0.5)
 
-		else
-			-- Optional: reset so it can be loaded again
-			autofarmLoaded = false
+					local character = player.Character
+					if not character then continue end
+
+					local root = character:FindFirstChild("HumanoidRootPart")
+					if not root then continue end
+
+					-- Detect if a map is loaded
+					local map = workspace:FindFirstChild("Map")
+
+					if not map then
+						-- No round active → stay in lobby
+						continue
+					end
+
+					-- Bag full → reset to lobby
+					if bagValue and bagValue.Value >= BAG_LIMIT then
+						character:BreakJoints()
+						continue
+					end
+
+					-- Find coins in map
+					local closestCoin
+					local closestDistance = math.huge
+
+					for _,coin in pairs(map:GetDescendants()) do
+						if coin.Name == "Coin" and coin:IsA("BasePart") then
+
+							local dist = (coin.Position - root.Position).Magnitude
+
+							if dist < closestDistance then
+								closestDistance = dist
+								closestCoin = coin
+							end
+
+						end
+					end
+
+					-- Teleport to coin
+					if closestCoin then
+						root.CFrame = closestCoin.CFrame + Vector3.new(0,3,0)
+					end
+
+				end
+
+			end)
+
 		end
 
 	end
