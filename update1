@@ -276,44 +276,114 @@ AutofarmTab:Toggle({
 })
 
 -- =========================
--- AUTOFARM LOOP
+-- SMART AUTOFARM SYSTEM
 -- =========================
 
-RunService.Heartbeat:Connect(function()
+local autofarmConnection
+local currentTarget
+local lastPosition
+local stuckTimer = 0
 
-	if not autofarmEnabled then return end
-	if not root then return end
+AutofarmTab:Toggle({
+	Title = "Enable Auto Farm",
+	Default = false,
+	Callback = function(state)
 
-	if tick() - lastCollect < cooldown then
-		return
-	end
+		autofarmEnabled = state
 
-	if bagValue and bagValue.Value >= BAG_LIMIT then
-		root.CFrame = CFrame.new(LobbyPosition)
-		return
-	end
+		if state then
 
-	local closestCoin
-	local closestDistance = math.huge
+			autofarmConnection = RunService.Heartbeat:Connect(function()
 
-	for coin in pairs(coins) do
+				if not player.Character then return end
+				local root = player.Character:FindFirstChild("HumanoidRootPart")
+				if not root then return end
 
-		if coin and coin.Parent then
+				-- cooldown
+				if tick() - lastCollect < cooldown then return end
 
-			local dist = (coin.Position - root.Position).Magnitude
+				-- bag full → lobby
+				if bagValue and bagValue.Value >= BAG_LIMIT then
+					root.CFrame = CFrame.new(LobbyPosition)
+					return
+				end
 
-			if dist < closestDistance then
-				closestDistance = dist
-				closestCoin = coin
+				-- =========================
+				-- SMART COIN ROUTING
+				-- =========================
+
+				if not currentTarget or not currentTarget.Parent then
+
+					local bestCoin
+					local bestScore = math.huge
+
+					for coin in pairs(coins) do
+
+						if coin and coin.Parent then
+
+							local dist = (coin.Position - root.Position).Magnitude
+
+							if dist < bestScore then
+								bestScore = dist
+								bestCoin = coin
+							end
+
+						end
+
+					end
+
+					currentTarget = bestCoin
+
+				end
+
+				if currentTarget then
+					root.CFrame = CFrame.new(currentTarget.Position + Vector3.new(0,3,0))
+					lastCollect = tick()
+				end
+
+
+				-- =========================
+				-- ANTI STUCK SYSTEM
+				-- =========================
+
+				if lastPosition then
+
+					local moved = (root.Position - lastPosition).Magnitude
+
+					if moved < 1 then
+						stuckTimer += RunService.Heartbeat:Wait()
+					else
+						stuckTimer = 0
+					end
+
+					-- if stuck 3 seconds
+					if stuckTimer > 3 then
+
+						currentTarget = nil
+						stuckTimer = 0
+
+						local spawnPos = getMapSpawn()
+
+						if spawnPos then
+							root.CFrame = CFrame.new(spawnPos + Vector3.new(0,3,0))
+						end
+
+					end
+
+				end
+
+				lastPosition = root.Position
+
+			end)
+
+		else
+
+			if autofarmConnection then
+				autofarmConnection:Disconnect()
+				autofarmConnection = nil
 			end
 
 		end
 
 	end
-
-	if closestCoin then
-		root.CFrame = CFrame.new(closestCoin.Position + Vector3.new(0,3,0))
-		lastCollect = tick()
-	end
-
-end)
+})
